@@ -17,6 +17,7 @@ public record PostListQuery(
         @Pattern(regexp = NulCharacters.NONE, message = NulCharacters.MESSAGE) String q,
         UUID tag,
         UUID author,
+        Boolean featured,
         String sort,
         String direction,
         Integer page,

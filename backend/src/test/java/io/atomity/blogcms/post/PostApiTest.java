@@ -349,22 +349,50 @@ class PostApiTest extends IntegrationTest {
         String published = createPost("Spot instances", "Interruptions happen.").path("id").asText();
         call(post("/api/v1/posts/" + published + "/publish")).andExpect(status().isOk());
 
+        // Create one featured post and one regular (non-featured) post.
+        Map<String, Object> featuredBody = postBody("Featured guide", doc("A featured article."));
+        featuredBody.put("featured", true);
+        call(post("/api/v1/posts"), featuredBody).andExpect(status().isCreated());
+
+        Map<String, Object> regularBody = postBody("Regular guide", doc("A regular article."));
+        regularBody.put("featured", false);
+        call(post("/api/v1/posts"), regularBody).andExpect(status().isCreated());
+
         // Substring search covers the body text, case-insensitively.
         call(get("/api/v1/posts?q=GRID")).andExpect(jsonPath("$.data.length()").value(1))
-                .andExpect(jsonPath("$.data[0].title").value("Carbon footprint"));
+            .andExpect(jsonPath("$.data[0].title").value("Carbon footprint"));
         // % is matched literally, not as a wildcard.
         call(get("/api/v1/posts?q=%25")).andExpect(jsonPath("$.data.length()").value(0));
 
         call(get("/api/v1/posts?status=PUBLISHED")).andExpect(jsonPath("$.data.length()").value(1));
         call(get("/api/v1/posts?tag=" + tag)).andExpect(jsonPath("$.data[0].title").value("Rightsizing pods"));
 
+        // Featured filter distinguishes true, false, and an omitted parameter.
+        call(get("/api/v1/posts?featured=true"))
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].title").value("Featured guide"))
+            .andExpect(jsonPath("$.data[0].featured").value(true));
+
+        call(get("/api/v1/posts?featured=false"))
+            .andExpect(jsonPath("$.data.length()").value(4))
+            .andExpect(jsonPath("$.data[*].featured").value(
+                org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(false))));
+
+        call(get("/api/v1/posts"))
+            .andExpect(jsonPath("$.meta.totalElements").value(5));
+
+        // The featured filter should combine with the text search filter.
+        call(get("/api/v1/posts?featured=true&q=featured"))
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].title").value("Featured guide"));
+
         call(get("/api/v1/posts?sort=title&direction=asc&size=2"))
-                .andExpect(jsonPath("$.data[0].title").value("Carbon footprint"))
-                .andExpect(jsonPath("$.data.length()").value(2))
-                .andExpect(jsonPath("$.meta.totalElements").value(3))
-                .andExpect(jsonPath("$.meta.totalPages").value(2));
+            .andExpect(jsonPath("$.data[0].title").value("Carbon footprint"))
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.meta.totalElements").value(5))
+            .andExpect(jsonPath("$.meta.totalPages").value(3));
         call(get("/api/v1/posts?sort=title&direction=asc&size=2&page=1"))
-                .andExpect(jsonPath("$.data[0].title").value("Spot instances"));
+            .andExpect(jsonPath("$.data[0].title").value("Regular guide"));
 
         call(get("/api/v1/posts?sort=password")).andExpect(status().isBadRequest());
         call(get("/api/v1/posts?status=BOGUS")).andExpect(status().isBadRequest());

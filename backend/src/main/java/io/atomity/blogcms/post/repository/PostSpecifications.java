@@ -17,6 +17,10 @@ public final class PostSpecifications {
         return status == null ? null : (root, query, cb) -> cb.equal(root.get("status"), status);
     }
 
+    public static Specification<Post> hasFeatured(Boolean featured) {
+        return featured == null ? null : (root, query, cb) -> cb.equal(root.get("featured"), featured);
+    }
+
     public static Specification<Post> hasTag(UUID tagId) {
         return tagId == null ? null : (root, query, cb) -> cb.equal(root.join("tags").get("id"), tagId);
     }

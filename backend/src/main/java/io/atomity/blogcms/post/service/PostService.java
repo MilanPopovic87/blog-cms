@@ -67,6 +67,7 @@ public class PostService {
         Specification<Post> spec = Specification.where(PostSpecifications.hasStatus(query.status()))
                 .and(PostSpecifications.hasTag(query.tag()))
                 .and(PostSpecifications.hasAuthor(query.author()))
+                .and(PostSpecifications.hasFeatured(query.featured()))
                 .and(PostSpecifications.matches(query.q()));
         return postRepository.findAll(spec, query.toPageable()).map(PostSummaryResponse::of);
     }

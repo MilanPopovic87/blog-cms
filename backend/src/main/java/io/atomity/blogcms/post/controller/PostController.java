@@ -34,7 +34,7 @@ public class PostController {
         this.postService = postService;
     }
 
-    /** GET /api/v1/posts?status&q&tag&author&sort&direction&page&size — pagination in {@code meta}. */
+    /** GET /api/v1/posts?status&q&tag&author&featured&sort&direction&page&size — pagination in {@code meta}. */
     @GetMapping
     public ApiResponse<List<PostSummaryResponse>> list(@Valid PostListQuery query) {
         Page<PostSummaryResponse> page = postService.list(query);
