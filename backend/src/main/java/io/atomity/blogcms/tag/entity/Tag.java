@@ -13,7 +13,7 @@ import java.util.UUID;
 @Table(name = "tags")
 public class Tag {
 
-    /** Length of the tags.slug column (VARCHAR(80)). */
+    /** Length of the tags.slug column. */
     public static final int MAX_SLUG_LENGTH = 80;
 
     @Id

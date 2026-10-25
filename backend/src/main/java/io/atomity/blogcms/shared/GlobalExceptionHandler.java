@@ -22,7 +22,6 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.sql.SQLException;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -35,7 +34,7 @@ public class GlobalExceptionHandler {
     private static final String FOREIGN_KEY_VIOLATION = "23503";
     private static final String STRING_TOO_LONG = "22001";
 
-    /** Unique slug constraints (V1 migration) and the resource each one belongs to. */
+    /** Unique slug constraints and the resource each one belongs to. */
     private static final Map<String, String> SLUG_CONSTRAINTS = Map.of(
             "uq_posts_slug", "post",
             "uq_tags_slug", "tag",
@@ -69,7 +68,7 @@ public class GlobalExceptionHandler {
         }
         return switch (sqlState) {
             case UNIQUE_VIOLATION -> {
-                String resource = constraint == null ? null : SLUG_CONSTRAINTS.get(constraint.toLowerCase(Locale.ROOT));
+                String resource = constraint == null ? null : SLUG_CONSTRAINTS.get(constraint);
                 yield resource != null
                         ? mappedDataError(HttpStatus.CONFLICT, "SLUG_TAKEN",
                                 "Another " + resource + " already uses this slug", sqlState, constraint)
@@ -168,7 +167,7 @@ public class GlobalExceptionHandler {
     /** Logs only the SQLState and constraint name: the driver's message can contain the rejected values. */
     private static ResponseEntity<ApiResponse<Object>> mappedDataError(HttpStatus status, String code, String message,
                                                                        String sqlState, String constraint) {
-        log.warn("Database rejected the write: SQLState {}, constraint {} -> {} {}",
+        log.warn("Database rejected the write (SQLState {}, constraint {}); answered {} {}",
                 sqlState, constraint, status.value(), code);
         return ResponseEntity.status(status).body(ApiResponse.error(apiError(code, message)));
     }
