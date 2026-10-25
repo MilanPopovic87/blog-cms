@@ -63,7 +63,9 @@ All under `/api/v1`, JSON in camelCase, wrapped in the response envelope.
   image). `publishedAt` is set on first publication and kept across unpublish/republish.
 - Saves carry the `version` the editor loaded; a stale version gets `409 VERSION_CONFLICT`
   instead of overwriting someone else's changes.
-- Slugs are unique per resource and derived from the title/name when left empty.
+- Slugs are unique per resource and derived from the title/name when left empty (at most
+  120 characters, 80 for tags). A slug already in use gets `409 SLUG_TAKEN`, also when two
+  saves race for it.
 - The post body is Tiptap JSON. On save the backend derives its plain text (for search),
   word count, reading time, and the library images it embeds; links must be
   `http(s)`, `mailto:`, `/` or `#`, and images `http(s)` or `/`.
