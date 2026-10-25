@@ -91,6 +91,8 @@ lib/api-client.ts  ──►  /api/v1/* route handler  ──►  backend /api/v
 
 - A draft can be archived directly too; unpublishing an archived post restores it to draft.
 - `publishedAt` is set on first publication and kept across unpublish/republish.
+- A published post can't be saved without a title or content (`422 NOT_PUBLISHABLE`);
+  unpublish it first. Drafts and archived posts can be saved empty.
 - Every save carries the `version` the editor loaded; a stale one gets
   `409 VERSION_CONFLICT` instead of overwriting someone else's changes.
 - On save, the backend derives the post's plain text (for search), word count, reading time
