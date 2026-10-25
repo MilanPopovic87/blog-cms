@@ -53,7 +53,8 @@ public class TagService {
     }
 
     private String resolveSlug(TagRequest request, UUID selfId) {
-        String slug = request.slug() == null || request.slug().isBlank() ? Slugs.slugify(request.name()) : request.slug();
+        String slug = request.slug() == null || request.slug().isBlank()
+                ? Slugs.slugify(request.name(), Tag.MAX_SLUG_LENGTH) : request.slug();
         if (slug.isEmpty()) {
             throw ApiException.badRequest("VALIDATION_ERROR", "slug could not be derived from the name; enter one");
         }
