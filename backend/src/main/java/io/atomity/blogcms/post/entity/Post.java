@@ -190,6 +190,11 @@ public class Post {
 
     /** True when there's nothing to read yet: no words and no images. */
     public boolean hasNoContent() {
+        return hasNoContent(wordCount, inlineImages);
+    }
+
+    /** The same check for values that aren't on a post yet, such as an edit about to be saved. */
+    public static boolean hasNoContent(int wordCount, Collection<Media> inlineImages) {
         return wordCount == 0 && inlineImages.isEmpty();
     }
 
