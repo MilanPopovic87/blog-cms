@@ -15,6 +15,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -49,6 +50,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleMissingParameter(Exception ex) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(apiError("BAD_REQUEST", ex.getMessage())));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiResponse<Object>> handleBadMultipart(MultipartException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(apiError("MALFORMED_REQUEST", "The upload could not be read")));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
