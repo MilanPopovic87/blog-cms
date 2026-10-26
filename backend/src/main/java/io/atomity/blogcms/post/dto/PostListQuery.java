@@ -45,6 +45,11 @@ public record PostListQuery(
         }
         int pageNumber = page == null ? 0 : Math.max(0, page);
         int pageSize = size == null ? DEFAULT_SIZE : Math.min(MAX_SIZE, Math.max(1, size));
+
+        // Validate pagination offset
+        if ((long) pageNumber * pageSize > Integer.MAX_VALUE) {
+            throw ApiException.badRequest("BAD_REQUEST", "page is out of range");
+        }
         // id breaks ties so pages never overlap. (Null placement for publishedAt is Postgres's
         // default — Spring Data can't express NULLS LAST through the Criteria API.)
         Sort order = Sort.by(new Sort.Order(dir, attribute), Sort.Order.asc("id"));

@@ -228,6 +228,14 @@ class PostApiTest extends IntegrationTest {
     }
 
     @Test
+    void listRejectsPageWhenOffsetExceedsIntegerMaxValue() throws Exception {
+        call(get("/api/v1/posts?page=2147483647"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors[0].errorCode").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.errors[0].message").value("page is out of range"));
+    }
+
+    @Test
     void countsCoverEveryStatus() throws Exception {
         createPost("Draft one", "x");
         String id = createPost("Published one", "y").path("id").asText();
