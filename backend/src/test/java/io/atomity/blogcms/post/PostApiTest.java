@@ -50,7 +50,7 @@ class PostApiTest extends IntegrationTest {
         return data(call(post("/api/v1/tags"), Map.of("name", name)).andExpect(status().isCreated())).path("id").asText();
     }
 
-        private JsonNode uploadImage() throws Exception {
+    private JsonNode uploadImage() throws Exception {
         var file = new MockMultipartFile("file", "photo.png", "image/png", TestImages.encode("png", 20, 20));
         return data(call(multipart("/api/v1/media").file(file)).andExpect(status().isCreated()));
     }
@@ -202,14 +202,16 @@ class PostApiTest extends IntegrationTest {
         String id = createPost("Live post", "Some words here").path("id").asText();
         JsonNode published = data(call(post("/api/v1/posts/" + id + "/publish")).andExpect(status().isOk()));
 
-       // Act
-       // Assert 1
+        // Act: PUT the same title and slug, but an empty body, with the version from the publish response
+        // Assert 1
         Map<String, Object> edit = postBody("Live post", doc());
         edit.put("slug", published.path("slug").asText());
         edit.put("version", published.path("version").asLong());
         call(put("/api/v1/posts/" + id), edit)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors[0].errorCode").value("NOT_PUBLISHABLE"));
+                .andExpect(jsonPath("$.errors[0].errorCode").value("NOT_PUBLISHABLE"))
+                .andExpect(jsonPath("$.errors[0].message")
+                .value("A published post can't be saved without some content. Unpublish it first."));
 
         // Assert 2
         JsonNode reloaded = data(call(get("/api/v1/posts/" + id)).andExpect(status().isOk()));
@@ -276,7 +278,6 @@ class PostApiTest extends IntegrationTest {
         assertThat(updated.path("wordCount").asInt()).isZero();
         assertThat(updated.path("version").asLong()).isGreaterThan(published.path("version").asLong());
     }
-
 
     @Test
     void publishKeepsFirstPublicationDate() throws Exception {
