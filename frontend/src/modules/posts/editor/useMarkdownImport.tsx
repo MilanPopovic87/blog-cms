@@ -9,6 +9,7 @@ import { clampHeadingLevels, MARKDOWN_EXTENSIONS, readMarkdownFile, validateMark
 import type { ContentDoc } from "@/types/content";
 import type { MarkdownSourceRef } from "@/types/markdown";
 import { uploadMarkdownSource } from "../api";
+import { deleteSourceIfPresent, isUnsavedUpload } from "./markdownSourceLifecycle";
 
 interface ParsedImport {
   file: File;
@@ -18,13 +19,16 @@ interface ParsedImport {
 /** Replaces the post body with an imported .md file (asks first if the post isn't empty). */
 export function useMarkdownImport(
   editor: Editor | null,
-  onSourceChange: (source: MarkdownSourceRef) => void,
+  onSourceChange: (source: MarkdownSourceRef | null) => void,
   onImportingChange: (importing: boolean) => void,
+  currentSource: MarkdownSourceRef | null,
+  savedSourceId: string | null,
 ) {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<ParsedImport | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const setImporting = (importing: boolean) => {
     setUploading(importing);
@@ -34,19 +38,51 @@ export function useMarkdownImport(
   // The original file is stored first, so a failed upload leaves the post as it was.
   const apply = async ({ file, doc }: ParsedImport) => {
     if (!editor) return;
+    const previous = currentSource;
     setImporting(true);
     try {
       const source = await uploadMarkdownSource(file);
       // The page can still be left from outside the guarded links (e.g. the browser's back button).
-      if (editor.isDestroyed) return;
+      if (editor.isDestroyed) {
+        await deleteSourceIfPresent(source.id);
+        return;
+      }
       editor.chain().focus().setContent(doc).run();
       onSourceChange(source);
       toast.success(`Imported "${file.name}".`);
+      // The old upload is only ours to clean up if it was never saved on the post —
+      // deleteIfUnused already handles a saved attachment once the replacement is saved.
+      if (isUnsavedUpload(previous, savedSourceId)) {
+        try {
+          await deleteSourceIfPresent(previous.id);
+        } catch {
+          toast.error(`Imported "${file.name}", but couldn't remove the previous upload.`);
+        }
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Couldn't upload "${file.name}".`);
       throw error;
     } finally {
       setImporting(false);
+    }
+  };
+
+  // An unsaved upload (never attached to the saved post) is safe to delete immediately.
+  // A saved attachment is left for deleteIfUnused to clean up once the removal is saved.
+  const removeSource = async () => {
+    if (!currentSource) return;
+    if (!isUnsavedUpload(currentSource, savedSourceId)) {
+      onSourceChange(null);
+      return;
+    }
+    setRemoving(true);
+    try {
+      await deleteSourceIfPresent(currentSource.id);
+      onSourceChange(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't remove the Markdown file.");
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -111,5 +147,5 @@ export function useMarkdownImport(
     </>
   );
 
-  return { openFilePicker: () => inputRef.current?.click(), uploading, ui };
+  return { openFilePicker: () => inputRef.current?.click(), uploading, removing, removeSource, ui };
 }

@@ -301,6 +301,7 @@ function PostEditor({ initial }: { initial: Post | null }) {
             onChange={onContentChange}
             markdownSource={form.markdownSource}
             onMarkdownSourceChange={onMarkdownSourceChange}
+            savedMarkdownSourceId={post?.markdownSource?.id ?? null}
             onImportingChange={setImporting}
           />
         </div>
