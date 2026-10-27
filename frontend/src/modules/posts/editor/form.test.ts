@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ContentDoc } from "@/types/content";
-import { EMPTY_FORM, formAfterSave, type EditorForm } from "./form";
+import { EMPTY_FORM, formAfterSave, snapshotOf, type EditorForm } from "./form";
 
 function paragraph(text: string): ContentDoc {
   return { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] };
@@ -32,5 +32,29 @@ describe("formAfterSave", () => {
   it("keeps a slug that changed on screen during the save", () => {
     const current = { ...sent, slug: "hello-world" };
     expect(formAfterSave(current, sent, "hello").slug).toBe("hello-world");
+  });
+});
+
+describe("snapshotOf", () => {
+  it("treats the same body with its keys in another order as unchanged", () => {
+    // Postgres JSONB sorts keys, so a loaded post has { text, type } where Tiptap emits { type, text }.
+    const fromApi: ContentDoc = { type: "doc", content: [{ content: [{ text: "First draft", type: "text" }], type: "paragraph" }] };
+    expect(snapshotOf({ ...sent, content: fromApi })).toBe(snapshotOf(sent));
+  });
+
+  it("still sees a change to the text", () => {
+    expect(snapshotOf({ ...sent, content: paragraph("First draft, edited") })).not.toBe(snapshotOf(sent));
+  });
+
+  it("still sees paragraphs in a different order", () => {
+    const one = { type: "paragraph", content: [{ type: "text", text: "One" }] };
+    const two = { type: "paragraph", content: [{ type: "text", text: "Two" }] };
+    const oneTwo: ContentDoc = { type: "doc", content: [one, two] };
+    const twoOne: ContentDoc = { type: "doc", content: [two, one] };
+    expect(snapshotOf({ ...sent, content: oneTwo })).not.toBe(snapshotOf({ ...sent, content: twoOne }));
+  });
+
+  it("still sees a change outside the body", () => {
+    expect(snapshotOf({ ...sent, tagIds: ["t1"] })).not.toBe(snapshotOf(sent));
   });
 });
