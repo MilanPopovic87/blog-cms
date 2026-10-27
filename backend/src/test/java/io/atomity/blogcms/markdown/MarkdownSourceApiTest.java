@@ -159,4 +159,36 @@ class MarkdownSourceApiTest extends IntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].errorCode").value("UNKNOWN_REFERENCE"));
     }
+
+    @Test
+    void anUnusedUploadCanBeDeletedDirectly() throws Exception {
+        String sourceId = upload("unused.md", MARKDOWN).path("id").asText();
+        String key = repository.findById(UUID.fromString(sourceId)).orElseThrow().getStorageKey();
+
+        call(delete("/api/v1/markdown-sources/" + sourceId)).andExpect(status().isNoContent());
+
+        assertThat(repository.findById(UUID.fromString(sourceId))).isEmpty();
+        assertThatThrownBy(() -> storage.load(key)).isInstanceOf(ApiException.class);
+
+        // No token at all: the endpoint stays behind the login like upload and download.
+        mockMvc.perform(delete("/api/v1/markdown-sources/" + sourceId)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anAttachedSourceCannotBeDeletedDirectly() throws Exception {
+        String sourceId = upload("attached.md", MARKDOWN).path("id").asText();
+        call(post("/api/v1/posts"), postBody("Imported", sourceId)).andExpect(status().isCreated());
+
+        call(delete("/api/v1/markdown-sources/" + sourceId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("MARKDOWN_SOURCE_IN_USE"));
+
+        call(get("/api/v1/markdown-sources/" + sourceId + "/file")).andExpect(status().isOk());
+    }
+
+    @Test
+    void deletingAnUnknownSourceReturnsNotFound() throws Exception {
+        call(delete("/api/v1/markdown-sources/00000000-0000-0000-0000-000000000000"))
+                .andExpect(status().isNotFound());
+    }
 }

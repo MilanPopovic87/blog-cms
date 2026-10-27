@@ -73,6 +73,28 @@ public class MarkdownSourceService {
     }
 
     /**
+     * Deletes the row and its stored file, refusing while a post still uses it.
+     * Mirrors {@code MediaService.delete}: the row is loaded and deleted in one
+     * short transaction, then the (best-effort) storage delete runs after it commits.
+     */
+    public void delete(UUID id) {
+        String key = transactionTemplate.execute(status -> {
+            MarkdownSource source = repository.findById(id)
+                    .orElseThrow(() -> ApiException.notFound("Markdown file"));
+            if (repository.countUsages(id) > 0) {
+                throw ApiException.conflict("MARKDOWN_SOURCE_IN_USE",
+                        "This Markdown file is used by a post. Remove it there first.");
+            }
+            String storageKey = source.getStorageKey();
+            repository.delete(source);
+            return storageKey;
+        });
+        if (key != null) {
+            storage.delete(key);
+        }
+    }
+
+    /**
      * Stores the file, then records it. WebDAV runs outside a database
      * transaction so a slow Nextcloud call cannot hold a pool connection.
      * If the database write fails the file is removed again.
