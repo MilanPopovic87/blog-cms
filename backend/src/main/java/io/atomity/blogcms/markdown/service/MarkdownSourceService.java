@@ -71,6 +71,14 @@ public class MarkdownSourceService {
             }
         });
     }
+    @Transactional
+    public void deleteUnusedById(UUID id) {
+        MarkdownSource source = repository.findById(id).orElse(null);
+        if (source != null) {
+            deleteIfUnused(source);
+        }
+    }
+
 
     /**
      * Deletes the row and its stored file, refusing while a post still uses it.
