@@ -144,6 +144,156 @@ class BlogApiTest extends IntegrationTest {
                 .andExpect(jsonPath("$.errors[0].errorCode").value("BAD_REQUEST"));
     }
 
+    @Test
+    void listFiltersByTagSlug() throws Exception {
+        String k8sTag = createTag("Kubernetes");
+        String devopsTag = createTag("DevOps");
+
+        Map<String, Object> post1 = postBody("K8s Only", doc("Content for k8s"));
+        post1.put("tagIds", List.of(k8sTag));
+        String id1 = data(call(post("/api/v1/posts"), post1).andExpect(status().isCreated())).path("id").asText();
+        publish(id1);
+
+        Map<String, Object> post2 = postBody("DevOps Only", doc("Content for devops"));
+        post2.put("tagIds", List.of(devopsTag));
+        String id2 = data(call(post("/api/v1/posts"), post2).andExpect(status().isCreated())).path("id").asText();
+        publish(id2);
+
+        Map<String, Object> post3 = postBody("Both Tags", doc("Content for both"));
+        post3.put("tagIds", List.of(k8sTag, devopsTag));
+        String id3 = data(call(post("/api/v1/posts"), post3).andExpect(status().isCreated())).path("id").asText();
+        publish(id3);
+
+        Map<String, Object> draft = postBody("Draft K8s", doc("Hidden draft"));
+        draft.put("tagIds", List.of(k8sTag));
+        call(post("/api/v1/posts"), draft).andExpect(status().isCreated());
+
+        // Tag slug filter returns only published posts with that tag.
+        mockMvc.perform(get("/api/v1/blogs?tag=kubernetes&sort=title&direction=asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(id3))
+                .andExpect(jsonPath("$.data[1].id").value(id1))
+                .andExpect(jsonPath("$.meta.totalElements").value(2));
+
+        mockMvc.perform(get("/api/v1/blogs?tag=devops&sort=title&direction=asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(id3))
+                .andExpect(jsonPath("$.data[1].id").value(id2))
+                .andExpect(jsonPath("$.meta.totalElements").value(2));
+
+        // Unknown tag returns 200 with an empty list.
+        mockMvc.perform(get("/api/v1/blogs?tag=unknown-tag"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0))
+                .andExpect(jsonPath("$.meta.totalElements").value(0));
+
+        // Blank tag query is ignored and returns all published posts.
+        mockMvc.perform(get("/api/v1/blogs?tag=  &sort=title&direction=asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(3));
+    }
+
+    @Test
+    void listSearchesAcrossTitleExcerptSlugAndBodyText() throws Exception {
+        Map<String, Object> postA = postBody("Rightsizing Pods", doc("Node memory capacity."));
+        String idA = data(call(post("/api/v1/posts"), postA).andExpect(status().isCreated())).path("id").asText();
+        publish(idA);
+
+        Map<String, Object> postB = postBody("FinOps Guide", doc("Regular cloud guide body."));
+        postB.put("excerpt", "Cloud spend analysis and budgeting");
+        String idB = data(call(post("/api/v1/posts"), postB).andExpect(status().isCreated())).path("id").asText();
+        publish(idB);
+
+        Map<String, Object> postC = postBody("Database Scaling", doc("Postgres replication and backups."));
+        String idC = data(call(post("/api/v1/posts"), postC).andExpect(status().isCreated())).path("id").asText();
+        publish(idC);
+
+        createPost("Secret Draft", "Replication secrets in draft.");
+
+        // Title match (case-insensitive)
+        mockMvc.perform(get("/api/v1/blogs?q=rIgHtSiZiNg"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(idA));
+
+        // Excerpt match
+        mockMvc.perform(get("/api/v1/blogs?q=spend"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(idB));
+
+        // Slug match
+        mockMvc.perform(get("/api/v1/blogs?q=finops-guide"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(idB));
+
+        // Content text match
+        mockMvc.perform(get("/api/v1/blogs?q=replication"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(idC));
+
+        // Drafts never match public search
+        mockMvc.perform(get("/api/v1/blogs?q=secret"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0))
+                .andExpect(jsonPath("$.meta.totalElements").value(0));
+
+        // Wildcards are escaped and matched literally
+        mockMvc.perform(get("/api/v1/blogs?q=%25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void listCombinesSearchTagSortAndPagination() throws Exception {
+        String tag = createTag("Architecture");
+
+        Map<String, Object> post1 = postBody("Microservices Resilience", doc("Patterns for circuit breakers."));
+        post1.put("tagIds", List.of(tag));
+        String id1 = data(call(post("/api/v1/posts"), post1).andExpect(status().isCreated())).path("id").asText();
+        publish(id1);
+
+        Map<String, Object> post2 = postBody("Monolith Resilience", doc("Patterns for database isolation."));
+        post2.put("tagIds", List.of(tag));
+        String id2 = data(call(post("/api/v1/posts"), post2).andExpect(status().isCreated())).path("id").asText();
+        publish(id2);
+
+        Map<String, Object> post3 = postBody("Serverless Resilience", doc("Patterns without servers."));
+        String id3 = data(call(post("/api/v1/posts"), post3).andExpect(status().isCreated())).path("id").asText();
+        publish(id3);
+
+        // Filter by tag and search term: matches post1 and post2, excludes post3 (no tag)
+        mockMvc.perform(get("/api/v1/blogs?tag=architecture&q=Resilience&sort=title&direction=asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(id1))
+                .andExpect(jsonPath("$.data[1].id").value(id2))
+                .andExpect(jsonPath("$.meta.totalElements").value(2));
+
+        // Further restrict search: matches only post1
+        mockMvc.perform(get("/api/v1/blogs?tag=architecture&q=Microservices"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(id1));
+
+        // Combined with pagination
+        mockMvc.perform(get("/api/v1/blogs?tag=architecture&q=Resilience&sort=title&direction=asc&size=1&page=0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(id1))
+                .andExpect(jsonPath("$.meta.totalElements").value(2))
+                .andExpect(jsonPath("$.meta.totalPages").value(2));
+
+        mockMvc.perform(get("/api/v1/blogs?tag=architecture&q=Resilience&sort=title&direction=asc&size=1&page=1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(id2));
+    }
+
     // ── Detail by id ───────────────────────────────────────────────────────
 
     @Test

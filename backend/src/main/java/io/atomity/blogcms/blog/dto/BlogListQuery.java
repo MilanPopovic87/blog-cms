@@ -10,6 +10,8 @@ import org.springframework.data.domain.Pageable;
  * from the admin list so both APIs behave the same.
  */
 public record BlogListQuery(
+        String q,
+        String tag,
         String sort,
         String direction,
         Integer page,

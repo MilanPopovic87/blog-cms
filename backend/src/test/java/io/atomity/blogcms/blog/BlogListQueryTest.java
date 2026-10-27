@@ -13,7 +13,7 @@ class BlogListQueryTest {
 
     @Test
     void defaultsToNewestPublishedFirst() {
-        Pageable pageable = new BlogListQuery(null, null, null, null).toPageable();
+        Pageable pageable = new BlogListQuery(null, null, null, null, null, null).toPageable();
 
         assertThat(pageable.getPageNumber()).isZero();
         assertThat(pageable.getPageSize()).isEqualTo(10);
@@ -25,19 +25,19 @@ class BlogListQueryTest {
 
     @Test
     void clampsPageSizeToOneToHundred() {
-        assertThat(new BlogListQuery(null, null, null, 1000).toPageable().getPageSize()).isEqualTo(100);
-        assertThat(new BlogListQuery(null, null, null, 0).toPageable().getPageSize()).isEqualTo(1);
-        assertThat(new BlogListQuery(null, null, null, -5).toPageable().getPageSize()).isEqualTo(1);
+        assertThat(new BlogListQuery(null, null, null, null, null, 1000).toPageable().getPageSize()).isEqualTo(100);
+        assertThat(new BlogListQuery(null, null, null, null, null, 0).toPageable().getPageSize()).isEqualTo(1);
+        assertThat(new BlogListQuery(null, null, null, null, null, -5).toPageable().getPageSize()).isEqualTo(1);
     }
 
     @Test
     void negativePageBecomesFirstPage() {
-        assertThat(new BlogListQuery(null, null, -3, null).toPageable().getPageNumber()).isZero();
+        assertThat(new BlogListQuery(null, null, null, null, -3, null).toPageable().getPageNumber()).isZero();
     }
 
     @Test
     void acceptsWhitelistedSortAndDirection() {
-        Pageable pageable = new BlogListQuery("title", "asc", 1, 5).toPageable();
+        Pageable pageable = new BlogListQuery(null, null, "title", "asc", 1, 5).toPageable();
 
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(5);
@@ -45,11 +45,23 @@ class BlogListQueryTest {
     }
 
     @Test
+    void supportsSearchAndTagFilterParameters() {
+        BlogListQuery query = new BlogListQuery("cost", "kubernetes", "title", "asc", 1, 5);
+
+        assertThat(query.q()).isEqualTo("cost");
+        assertThat(query.tag()).isEqualTo("kubernetes");
+        Pageable pageable = query.toPageable();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(5);
+        assertThat(pageable.getSort().getOrderFor("title").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
     void rejectsUnknownSortAndDirection() {
-        assertThatThrownBy(() -> new BlogListQuery("password", null, null, null).toPageable())
+        assertThatThrownBy(() -> new BlogListQuery(null, null, "password", null, null, null).toPageable())
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo("BAD_REQUEST");
-        assertThatThrownBy(() -> new BlogListQuery(null, "sideways", null, null).toPageable())
+        assertThatThrownBy(() -> new BlogListQuery(null, null, null, "sideways", null, null).toPageable())
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo("BAD_REQUEST");
     }

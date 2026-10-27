@@ -21,6 +21,13 @@ public final class PostSpecifications {
         return tagId == null ? null : (root, query, cb) -> cb.equal(root.join("tags").get("id"), tagId);
     }
 
+    public static Specification<Post> hasTagSlug(String tagSlug) {
+        if (tagSlug == null || tagSlug.isBlank()) {
+            return null;
+        }
+        return (root, query, cb) -> cb.equal(root.join("tags").get("slug"), tagSlug.strip());
+    }
+
     public static Specification<Post> hasAuthor(UUID authorId) {
         return authorId == null ? null : (root, query, cb) -> cb.equal(root.join("authors").get("id"), authorId);
     }
