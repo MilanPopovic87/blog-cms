@@ -61,6 +61,9 @@ All under `/api/v1`, JSON in camelCase, wrapped in the response envelope.
 
 - New posts are drafts. Publishing requires a title and some content (words or an
   image). `publishedAt` is set on first publication and kept across unpublish/republish.
+- A published post must stay publishable: a save that would leave it without a title or
+  content is refused with `422 NOT_PUBLISHABLE` and changes nothing. Unpublish it first to
+  save it empty. Drafts and archived posts can be saved empty.
 - Saves carry the `version` the editor loaded; a stale version gets `409 VERSION_CONFLICT`
   instead of overwriting someone else's changes.
 - Slugs are unique per resource and derived from the title/name when left empty.

@@ -111,8 +111,19 @@ public class PostService {
             throw ApiException.conflict("VERSION_CONFLICT",
                     "This post was changed somewhere else since you opened it. Reload to get the latest version.");
         }
+        PostEdit edit = resolveEdit(request, id);
+        // A live post must stay publishable: refuse a save that would leave it without a title or content.
+        if (post.getStatus() == PostStatus.PUBLISHED) {
+            List<String> missing = missingForPublication(edit.title(),
+                    Post.hasNoContent(edit.wordCount(), edit.inlineImages()));
+            if (!missing.isEmpty()) {
+                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "NOT_PUBLISHABLE",
+                        "A published post can't be saved without " + String.join(" and ", missing)
+                                + ". Unpublish it first.");
+            }
+        }
         MarkdownSource previousSource = post.getMarkdownSource();
-        post.edit(resolveEdit(request, id));
+        post.edit(edit);
         // Flush so the response carries the incremented version.
         PostResponse response = PostResponse.of(postRepository.saveAndFlush(post));
         // A replaced or removed .md file is deleted once nothing else uses it.
@@ -127,13 +138,7 @@ public class PostService {
     @Transactional
     public PostResponse publish(UUID id) {
         Post post = find(id);
-        List<String> missing = new ArrayList<>();
-        if (post.getTitle().isBlank()) {
-            missing.add("a title");
-        }
-        if (post.hasNoContent()) {
-            missing.add("some content");
-        }
+        List<String> missing = missingForPublication(post.getTitle(), post.hasNoContent());
         if (!missing.isEmpty()) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "NOT_PUBLISHABLE",
                     "Add " + String.join(" and ", missing) + " before publishing.");
@@ -175,6 +180,18 @@ public class PostService {
         postRepository.delete(post);
         postRepository.flush();
         markdownSourceService.deleteIfUnused(source);
+    }
+
+    /** What a post still needs before it can be live: a title, and words or a library image. */
+    private static List<String> missingForPublication(String title, boolean hasNoContent) {
+        List<String> missing = new ArrayList<>();
+        if (title.isBlank()) {
+            missing.add("a title");
+        }
+        if (hasNoContent) {
+            missing.add("some content");
+        }
+        return missing;
     }
 
     private Post find(UUID id) {
