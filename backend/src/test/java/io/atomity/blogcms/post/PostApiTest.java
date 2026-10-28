@@ -118,6 +118,28 @@ class PostApiTest extends IntegrationTest {
     }
 
     @Test
+    void nulCharactersAreRejectedBeforeTheyReachTheDatabase() throws Exception {
+        // Postgres can't store U+0000 in text or jsonb; it must be a 400, not a 500 from the database.
+        call(post("/api/v1/posts"), postBody("Hello\u0000world", doc("Some words")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("title must not contain NUL characters"));
+
+        Map<String, Object> seo = postBody("Fine title", doc("Some words"));
+        seo.put("canonicalUrl", "https://example.com/\u0000");
+        call(post("/api/v1/posts"), seo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].message").value("canonicalUrl must not contain NUL characters"));
+
+        call(post("/api/v1/posts"), postBody("Fine title", doc("Hello\u0000world")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("INVALID_CONTENT"))
+                .andExpect(jsonPath("$.errors[0].message").value("The post body must not contain NUL characters"));
+
+        call(get("/api/v1/posts/counts")).andExpect(jsonPath("$.data.ALL").value(0));
+    }
+
+    @Test
     void authorsKeepTheirOrderAndUnknownIdsFail() throws Exception {
         String lena = createAuthor("Lena");
         String rahul = createAuthor("Rahul");
@@ -349,6 +371,14 @@ class PostApiTest extends IntegrationTest {
     }
 
     @Test
+    void searchRejectsNulCharacters() throws Exception {
+        call(get("/api/v1/posts").param("q", "Grid\u0000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("q must not contain NUL characters"));
+    }
+
+    @Test
     void listRejectsPageWhenOffsetExceedsIntegerMaxValue() throws Exception {
         call(get("/api/v1/posts?page=2147483647"))
             .andExpect(status().isBadRequest())
@@ -396,5 +426,21 @@ class PostApiTest extends IntegrationTest {
 
         call(delete("/api/v1/tags/" + tag)).andExpect(status().isNoContent());
         call(get("/api/v1/posts/" + id)).andExpect(jsonPath("$.data.tags.length()").value(0));
+    }
+
+    @Test
+    void tagAndAuthorTextRejectNulCharacters() throws Exception {
+        call(post("/api/v1/tags"), Map.of("name", "Dev\u0000Ops"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("name must not contain NUL characters"));
+
+        call(post("/api/v1/authors"), Map.of("name", "Lena", "bio", "Writes\u0000about FinOps"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("bio must not contain NUL characters"));
+
+        call(get("/api/v1/tags")).andExpect(jsonPath("$.data.length()").value(0));
+        call(get("/api/v1/authors")).andExpect(jsonPath("$.data.length()").value(0));
     }
 }
