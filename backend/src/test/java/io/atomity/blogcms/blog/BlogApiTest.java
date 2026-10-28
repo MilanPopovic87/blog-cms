@@ -99,6 +99,14 @@ class BlogApiTest extends IntegrationTest {
     }
 
     @Test
+    void listRejectsPageWhenOffsetExceedsIntegerMaxValue() throws Exception {
+        call(get("/api/v1/blogs?page=2147483647"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors[0].errorCode").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.errors[0].message").value("page is out of range"));
+    }
+
+    @Test
     void listDefaultsToNewestFirstAndValidatesPaging() throws Exception {
         for (String title : List.of("Alpha", "Bravo", "Charlie")) {
             String id = createPost(title, title + " body.").path("id").asText();
