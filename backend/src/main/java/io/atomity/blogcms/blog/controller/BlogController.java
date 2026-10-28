@@ -26,7 +26,7 @@ public class BlogController {
         this.blogService = blogService;
     }
 
-    /** GET /api/v1/blogs?sort&direction&page&size — published posts, newest first; pagination in {@code meta}. Public (see SecurityConfig). */
+    /** GET /api/v1/blogs?q&tag&sort&direction&page&size — published posts, newest first; pagination in {@code meta}. Public (see SecurityConfig). */
     @GetMapping
     public ApiResponse<List<BlogSummaryResponse>> list(BlogListQuery query) {
         Page<BlogSummaryResponse> page = blogService.list(query);
