@@ -36,6 +36,33 @@ class ImageInspectorTest {
     }
 
     @Test
+    void rejectsFilesThatOnlyStartLikeAGif() {
+        byte[] notAGif = "GIF8-this is plain text, not an image".getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> ImageInspector.inspect(notAGif))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo("UNSUPPORTED_TYPE");
+    }
+
+    @Test
+    void acceptsBothGifVersions() {
+        byte[] gif = TestImages.encode("gif", 33, 17);
+        byte[] gif87 = gif.clone();
+        gif87[4] = '7';
+        assertThat(ImageInspector.inspect(gif87))
+                .isEqualTo(new ImageInspector.ImageInfo("image/gif", "gif", 33, 17));
+    }
+
+    @Test
+    void rejectsPngSignatureWithoutAnIhdrChunk() {
+        byte[] png = TestImages.encode("png", 10, 10);
+        byte[] broken = png.clone();
+        broken[12] = 'X'; // IHDR → XHDR
+        assertThatThrownBy(() -> ImageInspector.inspect(broken))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo("UNSUPPORTED_TYPE");
+    }
+
+    @Test
     void rejectsTruncatedHeaders() {
         byte[] png = TestImages.encode("png", 10, 10);
         assertThatThrownBy(() -> ImageInspector.inspect(java.util.Arrays.copyOf(png, 12)))
