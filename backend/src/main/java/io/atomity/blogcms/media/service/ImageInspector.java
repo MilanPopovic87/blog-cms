@@ -24,7 +24,8 @@ public final class ImageInspector {
             info = jpeg(data);
         } else if (startsWith(data, 0, 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A)) {
             info = png(data);
-        } else if (startsWith(data, 0, 'G', 'I', 'F', '8') && data.length >= 10) {
+        } else if ((startsWith(data, 0, 'G', 'I', 'F', '8', '7', 'a') || startsWith(data, 0, 'G', 'I', 'F', '8', '9', 'a'))
+                && data.length >= 10) {
             info = new ImageInfo("image/gif", "gif", u16le(data, 6), u16le(data, 8));
         } else if (startsWith(data, 0, 'R', 'I', 'F', 'F') && startsWith(data, 8, 'W', 'E', 'B', 'P')) {
             info = webp(data);
@@ -40,7 +41,8 @@ public final class ImageInspector {
     }
 
     private static ImageInfo png(byte[] d) {
-        if (d.length < 24) return null;
+        // The first chunk of every PNG is IHDR; the width and height sit right after its tag.
+        if (d.length < 24 || !startsWith(d, 12, 'I', 'H', 'D', 'R')) return null;
         return new ImageInfo("image/png", "png", u32be(d, 16), u32be(d, 20));
     }
 
