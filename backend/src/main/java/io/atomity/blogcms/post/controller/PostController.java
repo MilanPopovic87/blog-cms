@@ -36,7 +36,7 @@ public class PostController {
 
     /** GET /api/v1/posts?status&q&tag&author&sort&direction&page&size — pagination in {@code meta}. */
     @GetMapping
-    public ApiResponse<List<PostSummaryResponse>> list(PostListQuery query) {
+    public ApiResponse<List<PostSummaryResponse>> list(@Valid PostListQuery query) {
         Page<PostSummaryResponse> page = postService.list(query);
         return ApiResponse.ok(page.getContent(), PageMeta.of(page));
     }

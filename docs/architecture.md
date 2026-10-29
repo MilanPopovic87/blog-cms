@@ -70,6 +70,10 @@ All under `/api/v1`, JSON in camelCase, wrapped in the response envelope.
 - The post body is Tiptap JSON. On save the backend derives its plain text (for search),
   word count, reading time, and the library images it embeds; links must be
   `http(s)`, `mailto:`, `/` or `#`, and images `http(s)` or `/`.
+- Text can't contain the NUL character (U+0000), which PostgreSQL can't store in text or
+  jsonb. Text fields, the post body (anywhere in the document) and the `q`/`tag` list
+  parameters reject it with `400` before anything reaches the database; new text fields
+  use the same check (`shared/NulCharacters`).
 - Uploads are identified from their bytes (JPEG, PNG, WebP, GIF; ≤ 10 MB), never from the
   client's file name or Content-Type. An image used as a cover, inline, or as an avatar
   can't be deleted.

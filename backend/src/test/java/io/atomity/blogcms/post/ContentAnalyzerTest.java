@@ -6,6 +6,7 @@ import io.atomity.blogcms.post.service.ContentAnalyzer;
 import io.atomity.blogcms.shared.ApiException;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,5 +68,29 @@ class ContentAnalyzerTest {
         assertThatThrownBy(() -> ContentAnalyzer.analyze(parse("{'type':'paragraph'}")))
                 .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo("INVALID_CONTENT");
         assertThatThrownBy(() -> ContentAnalyzer.analyze(parse("[1,2]"))).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void rejectsNulCharactersAnywhereInTheDocument() {
+        // In body text, in an attribute the text walk never reads, and in a field name:
+        // jsonb can't store a NUL in any of them.
+        for (String json : List.of(
+                "{'type':'doc','content':[{'type':'paragraph','content':[{'type':'text','text':'one\\u0000two'}]}]}",
+                "{'type':'doc','content':[{'type':'image','attrs':{'src':'https://example.com/a.png','alt':'\\u0000'}}]}",
+                "{'type':'doc','content':[{'type':'paragraph','attrs':{'\\u0000':'x'}}]}")) {
+            assertThatThrownBy(() -> ContentAnalyzer.analyze(parse(json)))
+                    .isInstanceOf(ApiException.class)
+                    .hasMessage("The post body must not contain NUL characters")
+                    .extracting("errorCode").isEqualTo("INVALID_CONTENT");
+        }
+    }
+
+    @Test
+    void acceptsTheTextOfAnEscapedNul() throws Exception {
+        // A writer explaining escapes types a backslash and "u0000": six ordinary characters.
+        var analysis = ContentAnalyzer.analyze(parse(
+                "{'type':'doc','content':[{'type':'codeBlock','content':[{'type':'text','text':'char c = \\\\u0000;'}]}]}"));
+        assertThat(analysis.text()).isEqualTo("char c = \\u0000;");
+        assertThat(analysis.wordCount()).isEqualTo(4);
     }
 }

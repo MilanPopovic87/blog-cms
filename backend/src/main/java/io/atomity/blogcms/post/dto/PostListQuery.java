@@ -2,6 +2,8 @@ package io.atomity.blogcms.post.dto;
 
 import io.atomity.blogcms.post.entity.PostStatus;
 import io.atomity.blogcms.shared.ApiException;
+import io.atomity.blogcms.shared.NulCharacters;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -12,7 +14,7 @@ import java.util.UUID;
 /** Query parameters of GET /api/v1/posts. */
 public record PostListQuery(
         PostStatus status,
-        String q,
+        @Pattern(regexp = NulCharacters.NONE, message = NulCharacters.MESSAGE) String q,
         UUID tag,
         UUID author,
         String sort,

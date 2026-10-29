@@ -6,6 +6,7 @@ import io.atomity.blogcms.blog.dto.BlogSummaryResponse;
 import io.atomity.blogcms.blog.service.BlogService;
 import io.atomity.blogcms.shared.ApiResponse;
 import io.atomity.blogcms.shared.PageMeta;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,7 +29,7 @@ public class BlogController {
 
     /** GET /api/v1/blogs?q&tag&sort&direction&page&size — published posts, newest first; pagination in {@code meta}. Public (see SecurityConfig). */
     @GetMapping
-    public ApiResponse<List<BlogSummaryResponse>> list(BlogListQuery query) {
+    public ApiResponse<List<BlogSummaryResponse>> list(@Valid BlogListQuery query) {
         Page<BlogSummaryResponse> page = blogService.list(query);
         return ApiResponse.ok(page.getContent(), PageMeta.of(page));
     }

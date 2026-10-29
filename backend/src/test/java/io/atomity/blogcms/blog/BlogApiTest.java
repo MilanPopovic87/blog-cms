@@ -302,6 +302,20 @@ class BlogApiTest extends IntegrationTest {
                 .andExpect(jsonPath("$.data[0].id").value(id2));
     }
 
+    @Test
+    void listRejectsNulCharactersInSearchAndTag() throws Exception {
+        // No token on purpose: anyone can send this, so it must be a 400, not a 500 from the database.
+        mockMvc.perform(get("/api/v1/blogs").param("q", "\u0000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("q must not contain NUL characters"));
+
+        mockMvc.perform(get("/api/v1/blogs").param("tag", "kubernetes\u0000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("tag must not contain NUL characters"));
+    }
+
     // ── Detail by id ───────────────────────────────────────────────────────
 
     @Test

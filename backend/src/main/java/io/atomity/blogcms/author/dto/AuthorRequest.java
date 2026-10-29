@@ -1,5 +1,6 @@
 package io.atomity.blogcms.author.dto;
 
+import io.atomity.blogcms.shared.NulCharacters;
 import io.atomity.blogcms.shared.Slugs;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -11,6 +12,7 @@ import java.util.UUID;
 public record AuthorRequest(
         @NotBlank(message = "is required")
         @Size(max = 100, message = "must be at most 100 characters")
+        @Pattern(regexp = NulCharacters.NONE, message = NulCharacters.MESSAGE)
         String name,
 
         @Size(max = 120, message = "must be at most 120 characters")
@@ -18,6 +20,7 @@ public record AuthorRequest(
         String slug,
 
         @Size(max = 500, message = "must be at most 500 characters")
+        @Pattern(regexp = NulCharacters.NONE, message = NulCharacters.MESSAGE)
         String bio,
 
         UUID avatarId) {
