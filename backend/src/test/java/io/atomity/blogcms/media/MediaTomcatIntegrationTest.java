@@ -80,7 +80,8 @@ class MediaTomcatIntegrationTest extends IntegrationTest {
                 new TestCase("café.png", "inline; filename=\"cafe.png\"; filename*=UTF-8''caf%C3%A9.png"),
                 new TestCase("über.png", "inline; filename=\"uber.png\"; filename*=UTF-8''%C3%BCber.png"),
                 new TestCase("封面.png", "inline; filename=\"image.png\"; filename*=UTF-8''%E5%B0%81%E9%9D%A2.png"),
-                new TestCase("report\"final.png", "inline; filename=\"report\\\"final.png\"; filename*=UTF-8''report%22final.png")
+                new TestCase("report\"final.png", "inline; filename=\"report\\\"final.png\"; filename*=UTF-8''report%22final.png"),
+                new TestCase("___.png", "inline; filename=\"___.png\"")
         );
 
         byte[] png = TestImages.encode("png", 10, 10);

@@ -39,6 +39,14 @@ class MediaControllerTest {
         // Quote-containing filename (escaped in fallback, percent-encoded in filename*)
         assertThat(MediaController.contentDispositionHeader("report\"final.png"))
                 .isEqualTo("inline; filename=\"report\\\"final.png\"; filename*=UTF-8''report%22final.png");
+
+        // Underscore-only ASCII filename (preserves original name instead of replacing with image.png)
+        assertThat(MediaController.contentDispositionHeader("___.png"))
+                .isEqualTo("inline; filename=\"___.png\"");
+
+        // Null-safety
+        assertThat(MediaController.contentDispositionHeader(null))
+                .isEqualTo("inline; filename=\"image\"; filename*=UTF-8''");
     }
 
     @Test
