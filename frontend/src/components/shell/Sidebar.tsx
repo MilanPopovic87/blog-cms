@@ -5,7 +5,7 @@ import { EllipsisVertical, FileText, Image as ImageIcon, LogOut, Tag, Users, typ
 import { Menu } from "@/components/ui/Menu";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
-import { GuardedLink } from "./NavigationGuard";
+import { GuardedLink, useGuardedAction } from "./NavigationGuard";
 
 interface NavItem {
   label: string;
@@ -23,7 +23,9 @@ const NAV: NavItem[] = [
 export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  const guardedAction = useGuardedAction();
 
+  // Only runs once any unsaved changes have been confirmed as discarded, so Cancel keeps the session.
   const signOut = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.replace("/login");
@@ -81,7 +83,8 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
               <div className="text-[10px] text-muted">Administrator</div>
             </div>
             <Menu
-              align="left"
+              align="right"
+              placement="top"
               trigger={(props) => (
                 <button
                   type="button"
@@ -92,7 +95,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                   <EllipsisVertical size={14} />
                 </button>
               )}
-              items={[{ label: "Sign out", icon: LogOut, onSelect: () => void signOut() }]}
+              items={[{ label: "Sign out", icon: LogOut, onSelect: () => guardedAction(() => void signOut()) }]}
             />
           </>
         )}

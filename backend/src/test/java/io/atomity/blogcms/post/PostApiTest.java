@@ -3,6 +3,8 @@ package io.atomity.blogcms.post;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.atomity.blogcms.IntegrationTest;
 import org.junit.jupiter.api.Test;
+import io.atomity.blogcms.media.TestImages;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 
 class PostApiTest extends IntegrationTest {
 
@@ -45,6 +48,17 @@ class PostApiTest extends IntegrationTest {
 
     private String createTag(String name) throws Exception {
         return data(call(post("/api/v1/tags"), Map.of("name", name)).andExpect(status().isCreated())).path("id").asText();
+    }
+
+    private JsonNode uploadImage() throws Exception {
+        var file = new MockMultipartFile("file", "photo.png", "image/png", TestImages.encode("png", 20, 20));
+        return data(call(multipart("/api/v1/media").file(file)).andExpect(status().isCreated()));
+    }
+
+    static Map<String, Object> imageDoc(JsonNode media) {
+        Map<String, Object> image = Map.of("type", "image",
+                "attrs", Map.of("src", media.path("url").asText(), "mediaId", media.path("id").asText()));
+        return Map.of("type", "doc", "content", List.of(image));
     }
 
     // ── Create & read ──────────────────────────────────────────────────────
@@ -104,6 +118,28 @@ class PostApiTest extends IntegrationTest {
     }
 
     @Test
+    void nulCharactersAreRejectedBeforeTheyReachTheDatabase() throws Exception {
+        // Postgres can't store U+0000 in text or jsonb; it must be a 400, not a 500 from the database.
+        call(post("/api/v1/posts"), postBody("Hello\u0000world", doc("Some words")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("title must not contain NUL characters"));
+
+        Map<String, Object> seo = postBody("Fine title", doc("Some words"));
+        seo.put("canonicalUrl", "https://example.com/\u0000");
+        call(post("/api/v1/posts"), seo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].message").value("canonicalUrl must not contain NUL characters"));
+
+        call(post("/api/v1/posts"), postBody("Fine title", doc("Hello\u0000world")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("INVALID_CONTENT"))
+                .andExpect(jsonPath("$.errors[0].message").value("The post body must not contain NUL characters"));
+
+        call(get("/api/v1/posts/counts")).andExpect(jsonPath("$.data.ALL").value(0));
+    }
+
+    @Test
     void authorsKeepTheirOrderAndUnknownIdsFail() throws Exception {
         String lena = createAuthor("Lena");
         String rahul = createAuthor("Rahul");
@@ -156,6 +192,113 @@ class PostApiTest extends IntegrationTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors[0].errorCode").value("NOT_PUBLISHABLE"))
                 .andExpect(jsonPath("$.errors[0].message").value("Add a title and some content before publishing."));
+    }
+
+    @Test
+    void publishedPostCannotBeSavedWithoutTitle() throws Exception {
+        // Arrange
+        String id = createPost("Live post", "Some words here").path("id").asText();
+        JsonNode published = data(call(post("/api/v1/posts/" + id + "/publish")).andExpect(status().isOk()));
+
+        // Act: PUT the same content and slug, but title "", with the version from the publish response
+        // Assert 1
+        Map<String, Object> edit = postBody("", doc("Some words here"));
+        edit.put("slug", published.path("slug").asText());
+        edit.put("version", published.path("version").asLong());
+        call(put("/api/v1/posts/" + id), edit)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("NOT_PUBLISHABLE"))
+                .andExpect(jsonPath("$.errors[0].message")
+                .value("A published post can't be saved without a title. Unpublish it first."));
+
+        // Assert 2
+        JsonNode reloaded = data(call(get("/api/v1/posts/" + id)).andExpect(status().isOk()));
+        assertThat(reloaded.path("status").asText()).isEqualTo("PUBLISHED");
+        assertThat(reloaded.path("title").asText()).isEqualTo("Live post");
+        assertThat(reloaded.path("version").asLong()).isEqualTo(published.path("version").asLong());
+    }
+
+    @Test
+    void publishedPostCannotBeSavedWithoutContent() throws Exception {
+        // Arrange
+        String id = createPost("Live post", "Some words here").path("id").asText();
+        JsonNode published = data(call(post("/api/v1/posts/" + id + "/publish")).andExpect(status().isOk()));
+
+        // Act: PUT the same title and slug, but an empty body, with the version from the publish response
+        // Assert 1
+        Map<String, Object> edit = postBody("Live post", doc());
+        edit.put("slug", published.path("slug").asText());
+        edit.put("version", published.path("version").asLong());
+        call(put("/api/v1/posts/" + id), edit)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("NOT_PUBLISHABLE"))
+                .andExpect(jsonPath("$.errors[0].message")
+                .value("A published post can't be saved without some content. Unpublish it first."));
+
+        // Assert 2
+        JsonNode reloaded = data(call(get("/api/v1/posts/" + id)).andExpect(status().isOk()));
+        assertThat(reloaded.path("status").asText()).isEqualTo("PUBLISHED");
+        assertThat(reloaded.path("title").asText()).isEqualTo("Live post");
+        assertThat(reloaded.path("version").asLong()).isEqualTo(published.path("version").asLong());
+        assertThat(reloaded.path("wordCount").asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void publishedPostCanStillBeEdited() throws Exception {
+        // Arrange: create "Live post" with some text, publish it, keep the publish response
+        String id = createPost("Live post", "Some words here").path("id").asText();
+        JsonNode published = data(call(post("/api/v1/posts/" + id + "/publish")).andExpect(status().isOk()));
+
+        // Act: a normal edit, with a new title and new text, same slug, current version
+        Map<String, Object> edit = postBody("Live post, updated", doc("Some new words here"));
+        edit.put("slug", published.path("slug").asText());
+        edit.put("version", published.path("version").asLong());
+        JsonNode updated = data(call(put("/api/v1/posts/" + id), edit).andExpect(status().isOk()));
+
+        // Assert: the edit is saved and the post stays live
+        assertThat(updated.path("status").asText()).isEqualTo("PUBLISHED");
+        assertThat(updated.path("title").asText()).isEqualTo("Live post, updated");
+        assertThat(updated.path("wordCount").asInt()).isEqualTo(4);
+        assertThat(updated.path("version").asLong()).isGreaterThan(published.path("version").asLong());
+    }
+
+    @Test
+    void draftCanStillBeSavedEmpty() throws Exception {
+        // Arrange: a draft with some text (not published)
+        JsonNode created = createPost("Draft post", "Some words here");
+
+        // Act: save it with an empty title and an empty body, same slug, current version
+        Map<String, Object> edit = postBody("", doc());
+        edit.put("slug", created.path("slug").asText());
+        edit.put("version", created.path("version").asLong());
+        JsonNode saved = data(call(put("/api/v1/posts/" + created.path("id").asText()), edit)
+                .andExpect(status().isOk()));
+
+        // Assert: drafts aren't live, so the empty save is accepted and the post stays a draft
+        assertThat(saved.path("status").asText()).isEqualTo("DRAFT");
+        assertThat(saved.path("title").asText()).isEmpty();
+        assertThat(saved.path("wordCount").asInt()).isZero();
+    }
+
+    @Test
+    void publishedImageOnlyPostCanStillBeSaved() throws Exception {
+        // Arrange: a post whose only content is a library image, published
+        JsonNode media = uploadImage();
+        String id = data(call(post("/api/v1/posts"), postBody("Photo post", imageDoc(media)))
+                .andExpect(status().isCreated())).path("id").asText();
+        JsonNode published = data(call(post("/api/v1/posts/" + id + "/publish")).andExpect(status().isOk()));
+
+        // Act: rename it, keeping the image as the only content
+        Map<String, Object> edit = postBody("Photo post, renamed", imageDoc(media));
+        edit.put("slug", published.path("slug").asText());
+        edit.put("version", published.path("version").asLong());
+        JsonNode updated = data(call(put("/api/v1/posts/" + id), edit).andExpect(status().isOk()));
+
+        // Assert: an image counts as content, so the save is accepted and the post stays live
+        assertThat(updated.path("status").asText()).isEqualTo("PUBLISHED");
+        assertThat(updated.path("title").asText()).isEqualTo("Photo post, renamed");
+        assertThat(updated.path("wordCount").asInt()).isZero();
+        assertThat(updated.path("version").asLong()).isGreaterThan(published.path("version").asLong());
     }
 
     @Test
@@ -228,6 +371,22 @@ class PostApiTest extends IntegrationTest {
     }
 
     @Test
+    void searchRejectsNulCharacters() throws Exception {
+        call(get("/api/v1/posts").param("q", "Grid\u0000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("q must not contain NUL characters"));
+    }
+
+    @Test
+    void listRejectsPageWhenOffsetExceedsIntegerMaxValue() throws Exception {
+        call(get("/api/v1/posts?page=2147483647"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors[0].errorCode").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.errors[0].message").value("page is out of range"));
+    }
+
+    @Test
     void countsCoverEveryStatus() throws Exception {
         createPost("Draft one", "x");
         String id = createPost("Published one", "y").path("id").asText();
@@ -267,5 +426,21 @@ class PostApiTest extends IntegrationTest {
 
         call(delete("/api/v1/tags/" + tag)).andExpect(status().isNoContent());
         call(get("/api/v1/posts/" + id)).andExpect(jsonPath("$.data.tags.length()").value(0));
+    }
+
+    @Test
+    void tagAndAuthorTextRejectNulCharacters() throws Exception {
+        call(post("/api/v1/tags"), Map.of("name", "Dev\u0000Ops"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("name must not contain NUL characters"));
+
+        call(post("/api/v1/authors"), Map.of("name", "Lena", "bio", "Writes\u0000about FinOps"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("bio must not contain NUL characters"));
+
+        call(get("/api/v1/tags")).andExpect(jsonPath("$.data.length()").value(0));
+        call(get("/api/v1/authors")).andExpect(jsonPath("$.data.length()").value(0));
     }
 }

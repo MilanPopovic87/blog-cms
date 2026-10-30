@@ -2,17 +2,19 @@ package io.atomity.blogcms.post.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.atomity.blogcms.shared.ApiException;
+import io.atomity.blogcms.shared.NulCharacters;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
  * Reads a post body — a Tiptap/ProseMirror JSON document — on save: checks it is a
- * well-formed document with safe URLs, and derives the plain text, word count and the
- * library images it embeds. Mirrors the frontend's lib/content.ts so counts agree.
+ * well-formed document with safe URLs and no NUL characters, and derives the plain text,
+ * word count and the library images it embeds. Mirrors the frontend's lib/content.ts so counts agree.
  */
 public final class ContentAnalyzer {
 
@@ -45,6 +47,9 @@ public final class ContentAnalyzer {
         if (doc.toString().length() > MAX_DOCUMENT_CHARS) {
             throw ApiException.badRequest("CONTENT_TOO_LARGE", "The post body is too large");
         }
+        if (containsNul(doc)) {
+            throw ApiException.badRequest("INVALID_CONTENT", "The post body must not contain NUL characters");
+        }
         StringBuilder text = new StringBuilder();
         Set<UUID> imageIds = new LinkedHashSet<>();
         walk(doc, text, imageIds);
@@ -52,6 +57,31 @@ public final class ContentAnalyzer {
         String plain = WHITESPACE.matcher(text).replaceAll(" ").strip();
         int words = plain.isEmpty() ? 0 : plain.split(" ").length;
         return new Analysis(plain, words, readingTime(words), imageIds);
+    }
+
+    /**
+     * True if any string in the document holds a NUL character: a value or a field name, at any
+     * depth, not only the text the walk below reads. The body is stored as jsonb, which can't hold
+     * one anywhere, and its plain text couldn't be stored either.
+     */
+    private static boolean containsNul(JsonNode node) {
+        if (node.isTextual()) {
+            return NulCharacters.foundIn(node.textValue());
+        }
+        if (node.isObject()) {
+            for (Map.Entry<String, JsonNode> field : node.properties()) {
+                if (NulCharacters.foundIn(field.getKey()) || containsNul(field.getValue())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        for (JsonNode element : node) {
+            if (containsNul(element)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static int readingTime(int words) {

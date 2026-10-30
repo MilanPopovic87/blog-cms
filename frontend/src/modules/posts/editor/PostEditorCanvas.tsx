@@ -21,7 +21,7 @@ import { ApiError } from "@/types/api";
 import { POST_LIMITS, type Post } from "@/types/post";
 import { archivePost, createPost, deletePost, duplicatePost, getPost, publishPost, unpublishPost, updatePost } from "../api";
 import { EditorSidebar, type EditorMeta } from "./EditorSidebar";
-import { EMPTY_FORM, formFromPost, inputFromForm, validateForm, type EditorForm } from "./form";
+import { EMPTY_FORM, formAfterSave, formFromPost, inputFromForm, snapshotOf, validateForm, type EditorForm } from "./form";
 import { RichTextEditor } from "./RichTextEditor";
 
 /** Route entry: loads the post (or starts a blank one), then hands over to the editor. */
@@ -62,7 +62,7 @@ function PostEditor({ initial }: { initial: Post | null }) {
 
   const initialForm = initial ? formFromPost(initial) : EMPTY_FORM;
   const [form, setForm] = useState<EditorForm>(initialForm);
-  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialForm));
+  const [savedSnapshot, setSavedSnapshot] = useState(() => snapshotOf(initialForm));
   const [post, setPost] = useState<Post | null>(initial);
   const [busy, setBusy] = useState<Busy>(null);
   const [showErrors, setShowErrors] = useState(false);
@@ -73,7 +73,7 @@ function PostEditor({ initial }: { initial: Post | null }) {
   // already have their own slug, where changing the title must not move the URL.
   const slugFollowsTitle = useRef(!initial || (initial.status === "DRAFT" && initial.slug === slugify(initial.title)));
 
-  const dirty = JSON.stringify(form) !== savedSnapshot;
+  const dirty = snapshotOf(form) !== savedSnapshot;
   // A Markdown import still uploading counts as unsaved: leaving now would lose it.
   useUnsavedChangesWarning(dirty || importing);
   useBlockNavigation(dirty || importing);
@@ -119,15 +119,16 @@ function PostEditor({ initial }: { initial: Post | null }) {
       toast.error("Fix the highlighted fields before saving.");
       return null;
     }
-    const input = inputFromForm(form);
+    const sent = form;
+    const input = inputFromForm(sent);
     setBusy("save");
     try {
       const saved = post ? await updatePost(post.id, input, post.version) : await createPost(input);
       setPost(saved);
-      // The server may have filled in a slug; keep the form in step so it isn't dirty.
-      const nextForm = { ...form, slug: saved.slug };
-      setForm(nextForm);
-      setSavedSnapshot(JSON.stringify(nextForm));
+      // The server now holds what was sent (with the slug it may have filled in). Edits made
+      // during the request stay on screen and still count as unsaved.
+      setSavedSnapshot(snapshotOf({ ...sent, slug: saved.slug }));
+      setForm((current) => formAfterSave(current, sent, saved.slug));
       setShowErrors(false);
       if (!options.quiet) toast.success(post ? "Changes saved." : "Draft created.");
       if (!post) router.replace(`/posts/${saved.id}`);
@@ -300,6 +301,7 @@ function PostEditor({ initial }: { initial: Post | null }) {
             onChange={onContentChange}
             markdownSource={form.markdownSource}
             onMarkdownSourceChange={onMarkdownSourceChange}
+            savedMarkdownSourceId={post?.markdownSource?.id ?? null}
             onImportingChange={setImporting}
           />
         </div>
@@ -333,7 +335,7 @@ function PostEditor({ initial }: { initial: Post | null }) {
               reportError(error);
               throw error;
             }
-            setSavedSnapshot(JSON.stringify(form));
+            setSavedSnapshot(snapshotOf(form));
             toast.success("Post deleted.");
             router.push("/posts");
           }}

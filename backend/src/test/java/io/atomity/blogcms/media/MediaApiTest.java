@@ -80,6 +80,15 @@ class MediaApiTest extends IntegrationTest {
     }
 
     @Test
+    void altTextRejectsNulCharacters() throws Exception {
+        String id = upload("a.gif", "image/gif", TestImages.encode("gif", 10, 10)).path("id").asText();
+        call(patch("/api/v1/media/" + id), Map.of("altText", "A tiny\u0000square"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].message").value("altText must not contain NUL characters"));
+    }
+
+    @Test
     void imageInUseCannotBeDeleted() throws Exception {
         JsonNode media = upload("inline.png", "image/png", TestImages.encode("png", 20, 20));
         String id = media.path("id").asText();

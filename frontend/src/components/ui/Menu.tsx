@@ -17,10 +17,11 @@ export interface MenuProps {
   trigger: (props: { onClick: () => void; "aria-expanded": boolean; "aria-haspopup": "menu" }) => React.ReactNode;
   items: (MenuItem | "separator")[];
   align?: "left" | "right";
+  placement?: "top" | "bottom";
 }
 
 /** Small dropdown of actions — closes on outside click, Escape, or selection. */
-export function Menu({ trigger, items, align = "right" }: MenuProps) {
+export function Menu({ trigger, items, align = "right", placement = "bottom" }: MenuProps) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +48,8 @@ export function Menu({ trigger, items, align = "right" }: MenuProps) {
         <div
           role="menu"
           className={cn(
-            "absolute top-[calc(100%+4px)] z-[var(--z-dropdown)] min-w-[180px] rounded-md border-[1.5px] border-line bg-card p-1 shadow-popover",
+            "absolute z-[var(--z-dropdown)] min-w-[180px] rounded-md border-[1.5px] border-line bg-card p-1 shadow-popover",
+            placement === "top" ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]",
             align === "right" ? "right-0" : "left-0",
           )}
         >

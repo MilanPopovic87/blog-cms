@@ -36,6 +36,9 @@ export interface RichTextEditorProps {
   onChange: (doc: ContentDoc) => void;
   markdownSource: MarkdownSourceRef | null;
   onMarkdownSourceChange: (source: MarkdownSourceRef | null) => void;
+  /** The source id currently saved on the post, if any — an unsaved upload is safe to
+   * delete immediately on Remove/Replace; a saved one waits for deleteIfUnused on Save. */
+  savedMarkdownSourceId: string | null;
   /** True while an imported file is uploading, so the page can block navigation. */
   onImportingChange: (importing: boolean) => void;
 }
@@ -49,6 +52,7 @@ export function RichTextEditor({
   onChange,
   markdownSource,
   onMarkdownSourceChange,
+  savedMarkdownSourceId,
   onImportingChange,
 }: RichTextEditorProps) {
   const editor = useEditor({
@@ -61,15 +65,21 @@ export function RichTextEditor({
       attributes: { class: "post-content", "aria-label": "Post content", "aria-multiline": "true", role: "textbox" },
     },
   });
-  const markdownImport = useMarkdownImport(editor, onMarkdownSourceChange, onImportingChange);
+  const markdownImport = useMarkdownImport(
+    editor,
+    onMarkdownSourceChange,
+    onImportingChange,
+    markdownSource,
+    savedMarkdownSourceId,
+  );
 
   return (
     <>
       <MarkdownSourceBar
         source={markdownSource}
-        uploading={markdownImport.uploading}
+        uploading={markdownImport.uploading || markdownImport.removing}
         onImport={markdownImport.openFilePicker}
-        onRemove={() => onMarkdownSourceChange(null)}
+        onRemove={() => void markdownImport.removeSource()}
       />
       {markdownImport.ui}
       <div className="rounded-lg border-[1.5px] border-line bg-card shadow-card">

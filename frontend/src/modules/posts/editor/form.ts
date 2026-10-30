@@ -61,6 +61,28 @@ export function formFromPost(post: Post): EditorForm {
   };
 }
 
+/**
+ * The form as a string, used to check for unsaved changes. Object keys are sorted
+ * first, because Postgres JSONB stores the body with its keys in a different order
+ * from the one Tiptap uses. Without sorting, unchanged content would look changed.
+ * Arrays keep their order, since it matters.
+ */
+export function snapshotOf(form: EditorForm): string {
+  return JSON.stringify(withSortedKeys(form));
+}
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, child]) => [key, withSortedKeys(child)]),
+    );
+  }
+  return value;
+}
+
 /** A post saved before it has a title still needs a slug. */
 function fallbackSlug(title: string): string {
   return slugify(title) || `draft-${Date.now().toString(36)}`;
@@ -83,6 +105,14 @@ export function inputFromForm(form: EditorForm): PostInput {
     authorIds: form.authorIds,
     tagIds: form.tagIds,
   };
+}
+
+/**
+ * The form once a save lands. Typing carries on while the request is in flight, so
+ * `current` (what's on screen now) wins over `sent` (what was saved).
+ */
+export function formAfterSave(current: EditorForm, sent: EditorForm, savedSlug: string): EditorForm {
+  return current.slug === sent.slug ? { ...current, slug: savedSlug } : current;
 }
 
 /** Client-side checks run before saving; the API repeats them. */

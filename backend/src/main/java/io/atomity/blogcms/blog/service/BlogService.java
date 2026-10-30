@@ -3,11 +3,13 @@ package io.atomity.blogcms.blog.service;
 import io.atomity.blogcms.blog.dto.BlogListQuery;
 import io.atomity.blogcms.blog.dto.BlogResponse;
 import io.atomity.blogcms.blog.dto.BlogSummaryResponse;
+import io.atomity.blogcms.post.entity.Post;
 import io.atomity.blogcms.post.entity.PostStatus;
 import io.atomity.blogcms.post.repository.PostRepository;
 import io.atomity.blogcms.post.repository.PostSpecifications;
 import io.atomity.blogcms.shared.ApiException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +30,10 @@ public class BlogService {
 
     @Transactional(readOnly = true)
     public Page<BlogSummaryResponse> list(BlogListQuery query) {
-        return postRepository.findAll(PostSpecifications.hasStatus(PostStatus.PUBLISHED), query.toPageable())
+        Specification<Post> spec = Specification.where(PostSpecifications.hasStatus(PostStatus.PUBLISHED))
+                .and(PostSpecifications.hasTagSlug(query.tag()))
+                .and(PostSpecifications.matches(query.q()));
+        return postRepository.findAll(spec, query.toPageable())
                 .map(BlogSummaryResponse::of);
     }
 

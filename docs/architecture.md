@@ -48,7 +48,7 @@ All under `/api/v1`, JSON in camelCase, wrapped in the response envelope.
 | `POST /auth/login` | Exchange admin credentials for a token |
 | `GET /posts?status&q&tag&author&sort&direction&page&size` | Paginated list (`meta` holds page info) |
 | `GET /posts/counts` | Posts per status, for the list tabs |
-| `GET /blogs?sort&direction&page&size` | **Public.** Published posts, newest first (`meta` holds page info) |
+| `GET /blogs?q&tag&sort&direction&page&size` | **Public.** Published posts, newest first (`meta` holds page info) |
 | `GET /blogs/{id}` · `GET /blogs/slug/{slug}` | **Public.** One published post with its full content |
 | `GET/PUT/DELETE /posts/{id}`, `POST /posts` | Read, update (send the loaded `version`), delete, create |
 | `POST /posts/{id}/publish` · `/unpublish` · `/archive` · `/duplicate` | Lifecycle actions |
@@ -61,12 +61,19 @@ All under `/api/v1`, JSON in camelCase, wrapped in the response envelope.
 
 - New posts are drafts. Publishing requires a title and some content (words or an
   image). `publishedAt` is set on first publication and kept across unpublish/republish.
+- A published post must stay publishable: a save that would leave it without a title or
+  content is refused with `422 NOT_PUBLISHABLE` and changes nothing. Unpublish it first to
+  save it empty. Drafts and archived posts can be saved empty.
 - Saves carry the `version` the editor loaded; a stale version gets `409 VERSION_CONFLICT`
   instead of overwriting someone else's changes.
 - Slugs are unique per resource and derived from the title/name when left empty.
 - The post body is Tiptap JSON. On save the backend derives its plain text (for search),
   word count, reading time, and the library images it embeds; links must be
   `http(s)`, `mailto:`, `/` or `#`, and images `http(s)` or `/`.
+- Text can't contain the NUL character (U+0000), which PostgreSQL can't store in text or
+  jsonb. Text fields, the post body (anywhere in the document) and the `q`/`tag` list
+  parameters reject it with `400` before anything reaches the database; new text fields
+  use the same check (`shared/NulCharacters`).
 - Uploads are identified from their bytes (JPEG, PNG, WebP, GIF; ≤ 10 MB), never from the
   client's file name or Content-Type. An image used as a cover, inline, or as an avatar
   can't be deleted.
@@ -88,6 +95,7 @@ expired header is still rejected with `401` — the bearer filter runs on public
 
 ```bash
 curl -s 'http://localhost:8080/api/v1/blogs?sort=publishedAt&direction=desc&size=2'
+curl -s 'http://localhost:8080/api/v1/blogs?tag=kubernetes&q=cost'
 curl -s  http://localhost:8080/api/v1/blogs/8b1d0d0e-2f4a-4c1e-9d6b-3f0a1c2d4e5f
 curl -s  http://localhost:8080/api/v1/blogs/slug/rightsizing-kubernetes-pods
 curl -si http://localhost:8080/api/v1/blogs/<draft-id>            # 404: drafts stay invisible

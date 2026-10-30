@@ -2,6 +2,8 @@ package io.atomity.blogcms.blog.dto;
 
 import io.atomity.blogcms.post.dto.PostListQuery;
 import io.atomity.blogcms.post.entity.PostStatus;
+import io.atomity.blogcms.shared.NulCharacters;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.data.domain.Pageable;
 
 /**
@@ -10,6 +12,8 @@ import org.springframework.data.domain.Pageable;
  * from the admin list so both APIs behave the same.
  */
 public record BlogListQuery(
+        @Pattern(regexp = NulCharacters.NONE, message = NulCharacters.MESSAGE) String q,
+        @Pattern(regexp = NulCharacters.NONE, message = NulCharacters.MESSAGE) String tag,
         String sort,
         String direction,
         Integer page,
