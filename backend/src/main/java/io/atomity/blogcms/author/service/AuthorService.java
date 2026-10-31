@@ -5,7 +5,7 @@ import io.atomity.blogcms.author.dto.AuthorResponse;
 import io.atomity.blogcms.author.entity.Author;
 import io.atomity.blogcms.author.repository.AuthorRepository;
 import io.atomity.blogcms.media.entity.Media;
-import io.atomity.blogcms.media.service.MediaService;
+import io.atomity.blogcms.media.repository.MediaRepository;
 import io.atomity.blogcms.shared.ApiException;
 import io.atomity.blogcms.shared.Slugs;
 import org.springframework.stereotype.Service;
@@ -20,11 +20,11 @@ import java.util.stream.Collectors;
 public class AuthorService {
 
     private final AuthorRepository authorRepository;
-    private final MediaService mediaService;
+    private final MediaRepository mediaRepository;
 
-    public AuthorService(AuthorRepository authorRepository, MediaService mediaService) {
+    public AuthorService(AuthorRepository authorRepository, MediaRepository mediaRepository) {
         this.authorRepository = authorRepository;
-        this.mediaService = mediaService;
+        this.mediaRepository = mediaRepository;
     }
 
     @Transactional(readOnly = true)
@@ -81,6 +81,12 @@ public class AuthorService {
     }
 
     private Media avatar(UUID avatarId) {
-        return avatarId == null ? null : mediaService.get(avatarId);
+        if (avatarId == null) {
+            return null;
+        }
+        // MediaService.get() is not used because it throws 404 for URL-based media lookup,
+        // whereas avatarId is a request body reference.
+        return mediaRepository.findById(avatarId)
+                .orElseThrow(() -> ApiException.badRequest("UNKNOWN_REFERENCE", "The avatar image does not exist"));
     }
 }
