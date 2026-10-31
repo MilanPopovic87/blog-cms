@@ -18,14 +18,23 @@ public final class Slugs {
     }
 
     public static String slugify(String input) {
+        return slugify(input, MAX_LENGTH);
+    }
+
+    /**
+     * Like {@link #slugify(String)}, but cut to at most {@code maxLength} characters, so a
+     * derived slug fits its column. NFKD can make the slug longer than the input
+     * ("½" becomes "1-2").
+     */
+    public static String slugify(String input, int maxLength) {
         if (input == null) {
             return "";
         }
         String ascii = DIACRITICS.matcher(Normalizer.normalize(input, Normalizer.Form.NFKD)).replaceAll("");
         String slug = NON_ALPHANUMERIC.matcher(ascii.toLowerCase(Locale.ROOT)).replaceAll("-");
         slug = trimHyphens(slug);
-        if (slug.length() > MAX_LENGTH) {
-            slug = trimHyphens(slug.substring(0, MAX_LENGTH));
+        if (slug.length() > maxLength) {
+            slug = trimHyphens(slug.substring(0, maxLength));
         }
         return slug;
     }
