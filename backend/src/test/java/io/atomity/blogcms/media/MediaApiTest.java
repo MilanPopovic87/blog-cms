@@ -42,10 +42,21 @@ class MediaApiTest extends IntegrationTest {
         mockMvc.perform(get(media.path("url").asText()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", "image/png"))
+                .andExpect(header().string("Content-Disposition", "inline; filename=\"cover.png\""))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(content().bytes(png));
 
         call(get("/api/v1/media")).andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
+    void servesInternationalizedFilenameInContentDisposition() throws Exception {
+        byte[] png = TestImages.encode("png", 10, 10);
+        JsonNode media = upload("café.png", "image/png", png);
+        mockMvc.perform(get(media.path("url").asText()))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        "inline; filename=\"cafe.png\"; filename*=UTF-8''caf%C3%A9.png"));
     }
 
     @Test
