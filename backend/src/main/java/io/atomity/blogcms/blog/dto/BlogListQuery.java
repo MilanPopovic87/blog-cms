@@ -22,7 +22,7 @@ public record BlogListQuery(
     private static final String DEFAULT_SORT = "publishedAt";
 
     public Pageable toPageable() {
-        return new PostListQuery(PostStatus.PUBLISHED, null, null, null,
+        return new PostListQuery(PostStatus.PUBLISHED, null, null, null, null,
                 sort == null ? DEFAULT_SORT : sort, direction, page, size).toPageable();
     }
 }

@@ -46,7 +46,7 @@ All under `/api/v1`, JSON in camelCase, wrapped in the response envelope.
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /auth/login` | Exchange admin credentials for a token |
-| `GET /posts?status&q&tag&author&sort&direction&page&size` | Paginated list (`meta` holds page info) |
+| `GET /posts?status&q&tag&author&featured&sort&direction&page&size` | Paginated list (`meta` holds page info); `featured=true` or `featured=false` filters by featured status |
 | `GET /posts/counts` | Posts per status, for the list tabs |
 | `GET /blogs?q&tag&sort&direction&page&size` | **Public.** Published posts, newest first (`meta` holds page info) |
 | `GET /blogs/{id}` · `GET /blogs/slug/{slug}` | **Public.** One published post with its full content |

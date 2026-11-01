@@ -399,6 +399,42 @@ class PostApiTest extends IntegrationTest {
     }
 
     @Test
+    void featuredFilterCombinesWithStatusTagAndAuthor() throws Exception {
+        String author = createAuthor("Shared author");
+        String tag = createTag("Shared tag");
+
+        Map<String, Object> featuredBody = postBody("Featured guide", doc("Featured content."));
+        featuredBody.put("featured", true);
+        featuredBody.put("authorIds", List.of(author));
+        featuredBody.put("tagIds", List.of(tag));
+        call(post("/api/v1/posts"), featuredBody).andExpect(status().isCreated());
+
+        Map<String, Object> regularBody = postBody("Regular guide", doc("Regular content."));
+        regularBody.put("featured", false);
+        regularBody.put("authorIds", List.of(author));
+        regularBody.put("tagIds", List.of(tag));
+        call(post("/api/v1/posts"), regularBody).andExpect(status().isCreated());
+
+        // Both posts are drafts, so featured must further narrow the status results.
+        call(get("/api/v1/posts?status=DRAFT&featured=true"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].title").value("Featured guide"));
+
+        // Both posts have the same tag, so featured must further narrow the tag results.
+        call(get("/api/v1/posts?tag=" + tag + "&featured=true"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].title").value("Featured guide"));
+
+        // Both posts have the same author, so featured must further narrow the author results.
+        call(get("/api/v1/posts?author=" + author + "&featured=true"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].title").value("Featured guide"));
+    }
+
+    @Test
     void searchRejectsNulCharacters() throws Exception {
         call(get("/api/v1/posts").param("q", "Grid\u0000"))
                 .andExpect(status().isBadRequest())
